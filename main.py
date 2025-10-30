@@ -1,87 +1,107 @@
 # ====================================================================
 # ફાઈલનું નામ: main.py
-# આ કોડને તમારા GitHub રિપોઝીટરીની main.py ફાઈલમાં પેસ્ટ કરો
+# આ નવો કોડ તમારી GitHub રિપોઝીટરીની main.py ફાઈલમાં પેસ્ટ કરો
 # ====================================================================
 
 import os
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+import json
 
 # Flask એપ્લિકેશન બનાવો
 app = Flask(__name__)
 
 # CORS (Cross-Origin Resource Sharing) ને સક્ષમ કરો
-# આનાથી તમારી API ને બીજી વેબસાઇટ પરથી ઍક્સેસ કરી શકાશે
 CORS(app)
 
-# અપલોડ થયેલી ઈમેજોને સ્ટોર કરવા માટે 'uploads' નામની ડિરેક્ટરી બનાવો
-# Render.com પર આ કામચલાઉ સ્ટોરેજ હશે
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Markdown ફાઇલોને સ્ટોર કરવા માટે 'markdown_files' નામની ડિરેક્ટરી બનાવો
+# Render.com પર આ કામચલાઉ સ્ટોરેજ હશે.
+MARKDOWN_FOLDER = 'markdown_files'
+if not os.path.exists(MARKDOWN_FOLDER):
+    os.makedirs(MARKDOWN_FOLDER)
 
-# ટેક્સ્ટ ડેટાને મેમરીમાં સ્ટોર કરવા માટે એક ગ્લોબલ વેરિયેબલ
-shared_text = "Hello from the updated server on Render.com!"
-
-# --- મુખ્ય (Index) Route ---
-# આ રૂટ ચકાસવા માટે છે કે સર્વર ચાલી રહ્યું છે કે નહીં
+# --- મુખ્ય રૂટ ---
 @app.route("/", methods=['GET'])
 def index():
     """એપ્લિકેશન ચાલી રહી છે તે ચકાસવા માટેનો મુખ્ય રૂટ."""
-    return "<h1>Your Flask server is running correctly! (Gallery Edition)</h1>"
+    return "<h1>Markdown API Server is Running!</h1>"
 
-# --- ટેક્સ્ટ માટેના Routes ---
-@app.route('/get_text', methods=['GET'])
-def get_text():
-    """ક્લાયન્ટને હાલનો ટેક્સ્ટ JSON ફોર્મેટમાં મોકલે છે."""
-    return jsonify({"text": shared_text})
+# --- Render.com ને Active રાખવા માટેનો રૂટ ---
+@app.route("/a", methods=['GET'])
+def keep_alive():
+    """cron-job.org દ્વારા ઉપયોગમાં લેવા માટેનો સિમ્પલ રૂટ."""
+    return "1"
 
-@app.route('/send_text', methods=['POST'])
-def send_text():
-    """ક્લાયન્ટ પાસેથી નવો ટેક્સ્ટ મેળવીને તેને અપડેટ કરે છે."""
-    global shared_text
-    data = request.get_json()
-    if data and 'text' in data:
-        shared_text = data['text']
-        return jsonify({"message": "Text updated successfully!", "new_text": shared_text}), 200
-    return jsonify({"error": "Invalid data. 'text' field is required."}), 400
+# --- Markdown ફાઇલો માટેના Routes ---
 
-# --- ઈમેજ માટેના Routes ---
-@app.route('/upload_image', methods=['POST'])
-def upload_image():
-    """ક્લાયન્ટ પાસેથી ઈમેજ ફાઈલ અપલોડ કરાવે છે."""
-    if 'file' not in request.files or request.files['file'].filename == '':
-        return jsonify({"error": "No file selected"}), 400
-    
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    
-    return jsonify({"message": "Image uploaded successfully!", "filename": filename}), 200
-
-@app.route('/get_image/<path:filename>')
-def get_image(filename):
-    """સર્વર પરથી ચોક્કસ ઈમેજ ક્લાયન્ટને મોકલે છે."""
+@app.route('/files', methods=['GET'])
+def list_files():
+    """'markdown_files' ફોલ્ડરમાં રહેલી બધી .md ફાઇલોની યાદી મોકલે છે."""
     try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-    except FileNotFoundError:
-        return jsonify({"error": "Image not found."}), 404
-
-# --- ગેલેરી માટેનો Route ---
-@app.route('/list_images', methods=['GET'])
-def list_images():
-    """'uploads' ફોલ્ડરમાં રહેલી બધી ઈમેજોની યાદી મોકલે છે."""
-    try:
-        image_files = os.listdir(app.config['UPLOAD_FOLDER'])
-        allowed_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
-        
-        images = [f for f in image_files if os.path.splitext(f)[1].lower() in allowed_extensions]
-        
-        # નવી અપલોડ થયેલી ઈમેજ પહેલા દેખાય તે માટે ફેરફારના સમય મુજબ સોર્ટ કરો
-        images.sort(key=lambda x: os.path.getmtime(os.path.join(app.config['UPLOAD_FOLDER'], x)), reverse=True)
-        
-        return jsonify({"images": images})
+        files = [f for f in os.listdir(MARKDOWN_FOLDER) if f.endswith('.md')]
+        files.sort(key=lambda x: os.path.getmtime(os.path.join(MARKDOWN_FOLDER, x)), reverse=True)
+        return jsonify({"files": files})
     except Exception as e:
-        return jsonify({"error": f"Could not list images: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/files/<filename>', methods=['GET'])
+def get_file(filename):
+    """ચોક્કસ Markdown ફાઈલનો કન્ટેન્ટ મોકલે છે."""
+    try:
+        safe_filename = secure_filename(filename)
+        filepath = os.path.join(MARKDOWN_FOLDER, safe_filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({"filename": safe_filename, "content": content})
+        else:
+            return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/files', methods=['POST'])
+def save_file():
+    """નવી Markdown ફાઈલ બનાવે છે અથવા હાલની ફાઈલને અપડેટ કરે છે."""
+    data = request.get_json()
+    if not data or 'filename' not in data or 'content' not in data:
+        return jsonify({"error": "Invalid data. 'filename' and 'content' are required."}), 400
+
+    try:
+        filename = data['filename']
+        # ખાતરી કરો કે ફાઈલનેમ .md માં સમાપ્ત થાય છે
+        if not filename.endswith('.md'):
+            filename += '.md'
+            
+        safe_filename = secure_filename(filename)
+        if not safe_filename:
+            return jsonify({"error": "Invalid filename."}), 400
+
+        filepath = os.path.join(MARKDOWN_FOLDER, safe_filename)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(data['content'])
+        
+        return jsonify({"message": f"File '{safe_filename}' saved successfully."}), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/files/<filename>', methods=['DELETE'])
+def delete_file(filename):
+    """ચોક્કસ Markdown ફાઈલને ડિલીટ કરે છે."""
+    try:
+        safe_filename = secure_filename(filename)
+        filepath = os.path.join(MARKDOWN_FOLDER, safe_filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            return jsonify({"message": f"File '{safe_filename}' deleted successfully."})
+        else:
+            return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# આ ભાગને અંતમાં રાખો
+if __name__ == "__main__":
+    # Render.com માટે પોર્ટ અને હોસ્ટને 0.0.0.0 પર સેટ કરો
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
